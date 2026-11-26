@@ -62,6 +62,21 @@ Clona el repositorio y agrega el servidor a la configuración MCP del cliente:
 }
 ```
 
+## Primer uso paso a paso
+
+1. Abre **SAP Logon** e inicia sesión en el sistema donde quieres trabajar (por ejemplo `DEV`, mandante `100`).
+2. En Claude Code pide: *"Lista mis sesiones de SAP"*. Claude llama a `listar_sesiones` y te muestra el sistema, el mandante, el usuario y la transacción de cada ventana abierta.
+3. Pide una tarea concreta, por ejemplo: *"En DEV abre una sesión nueva, entra a SE38 y descarga el fuente de RSPARAM"*. Lo que Claude hace por dentro:
+   1. `abrir_sesion("DEV", "100")` abre una **ventana nueva**. Las tuyas no se tocan.
+   2. `ejecutar_transaccion(..., "SE38")`.
+   3. `leer_pantalla` para ubicar los campos por su ID exacto.
+   4. `leer_fuente_abap(..., "RSPARAM")` devuelve las líneas del programa.
+   5. `cerrar_sesion` cierra la ventana que abrió.
+4. Después de cada paso Claude revisa la **barra de estado** y los **popups**. Si aparece un error o una pregunta de SAP, se detiene y te lo informa.
+5. Para tareas que no cubren las herramientas incluidas, pídelo igual (*"lee la cabecera del usuario X en SU01 y guárdalo como script"*). Claude explora la pantalla, prueba el código y lo guarda como script reutilizable.
+
+Para revisar qué se hizo, abre el log de auditoría: `%USERPROFILE%\.sapgui-claude\auditoria.jsonl`, una línea por acción.
+
 ## Ejemplos de uso
 
 - "Abre una sesión nueva en DEV, entra a SE38 y descarga el fuente del programa RSPARAM."
@@ -116,6 +131,23 @@ Por defecto **todo está habilitado**. Para restringir, crea `%USERPROFILE%\.sap
 | `log_auditoria` | Archivo JSONL con cada acción (hora, sistema, usuario, detalle). Activado por defecto; `""` lo desactiva |
 
 La carpeta base se puede cambiar con la variable de entorno `SAPGUI_CLAUDE_HOME`.
+
+## Solución de problemas
+
+| Síntoma | Causa probable | Qué hacer |
+|---|---|---|
+| `No se encontró SAP GUI ... (-2147221020, 'Sintaxis no válida')` | SAP Logon no está abierto, o SAP GUI corre con otro usuario de Windows o con distinto nivel de privilegios (uno como administrador y el otro no) | Abre SAP Logon e inicia sesión. Abre SAP GUI y Claude Code con el mismo usuario de Windows y el mismo nivel de privilegios |
+| `SAP GUI Scripting no está habilitado` | El scripting está desactivado en el cliente | SAP Logon → Opciones → Accesibilidad y scripting → Scripting → marcar **Habilitar scripting**. Ver [docs/requisitos-sap.md](docs/requisitos-sap.md) |
+| `listar_sesiones` muestra `scripting_bloqueado_por_servidor: true` | El servidor SAP no permite scripting | Pide a Basis el parámetro `sapgui/user_scripting = TRUE` (RZ11) y, si corresponde, la autorización `S_SCR` |
+| SAP GUI muestra "Un script intenta conectarse" en cada acción | Están activas las notificaciones de scripting | Desmarca **Notificar si un script se conecta a SAP GUI** y **Notificar si un script abre una conexión** en las mismas opciones |
+| `listar_sesiones` responde vacío | Hay conexiones abiertas, pero ninguna con sesión iniciada | Inicia sesión: la pantalla de login no cuenta como sesión |
+| Claude no muestra las herramientas `sapgui` | El plugin no cargó o el servidor no arrancó | Reinicia Claude Code. Revisa con `/plugin` que `sapgui` esté habilitado y con `/mcp` el estado del servidor |
+| `uv` no se reconoce como comando | `uv` no está instalado o no está en el PATH | `winget install --id astral-sh.uv` y reinicia la terminal o Claude Code |
+| El servidor tarda en arrancar la primera vez | `uv` descarga Python y las dependencias | Espera a que termine; las siguientes veces arranca en segundos |
+| `The control could not be found by id` | El ID no existe en esa pantalla (otra versión de SAP, otro idioma u otro dynpro) | Pide a Claude que use `leer_pantalla` y, si es un script, que lo adapte con `guardar_script` |
+| `No hay sesión abierta en X/Y` | El SID o el mandante no coinciden con una sesión iniciada | Revisa los valores con `listar_sesiones` |
+| `Bloqueado ... sistemas_permitidos` / `solo_lectura` | Restricción de tu `config.json` | Revisa con `ver_configuracion` y edita `%USERPROFILE%\.sapgui-claude\config.json` |
+| `La conexión ya tiene el máximo de sesiones` | SAP permite 6 ventanas por conexión (valor por defecto) | Cierra alguna ventana de SAP |
 
 ## ⚠️ Advertencias
 
