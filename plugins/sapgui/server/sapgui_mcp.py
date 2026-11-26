@@ -3,6 +3,7 @@
 # dependencies = [
 #   "mcp>=1.2,<2",
 #   "pywin32>=306; sys_platform == 'win32'",
+#   "python-docx>=1.1",
 # ]
 # ///
 """Servidor MCP para controlar SAP GUI for Windows mediante SAP GUI Scripting.
@@ -45,6 +46,13 @@ CONFIG_FILE = HOME / "config.json"
 for _p in (USER_SCRIPTS, HISTORIAL):
     _p.mkdir(parents=True, exist_ok=True)
 
+# Plantillas de entregables: se importan antes de agregar las carpetas de scripts al path
+if str(SERVER_DIR) not in sys.path:
+    sys.path.insert(0, str(SERVER_DIR))
+from plantillas import web as _web, word as _word  # noqa: E402
+from plantillas.esqueletos import ESQUELETOS  # noqa: E402
+from plantillas.marca import MARCA_DEFECTO, bom_eom, cargar_marca  # noqa: E402
+
 # Los scripts importan "utilidades" (y entre ellos). La carpeta del usuario va primero.
 for _p in (str(BASE_SCRIPTS), str(USER_SCRIPTS)):
     if _p not in sys.path:
@@ -55,6 +63,7 @@ CONFIG_DEFECTO: dict[str, Any] = {
     "solo_lectura": False,
     "tablas_bloqueadas": [],
     "log_auditoria": str(HOME / "auditoria.jsonl"),  # "" para desactivar
+    "marca": MARCA_DEFECTO,      # empresa, logos y colores de los entregables
 }
 
 
@@ -694,6 +703,52 @@ def ejecutar_codigo(id_sesion: str, codigo: str) -> dict:
                     "salida": buf.getvalue(), **_resumen(s)}
 
     return COM.run(trabajo)
+
+
+# ---- Entregables: Word (EF, ET, QA) e informe web ----
+@mcp.tool()
+def ver_plantilla(tipo: str) -> dict:
+    """Devuelve el esqueleto JSON de un entregable para completarlo: 'ef' (especificación funcional),
+    'et' (especificación técnica), 'qa' (dictamen QA) o 'informe' (informe web). Incluye la guía de bloques."""
+    tipo = tipo.lower()
+    if tipo not in ESQUELETOS:
+        raise ValueError(f"tipo debe ser uno de {list(ESQUELETOS)}")
+    guia = (_web.__doc__ if tipo == "informe" else _word.__doc__) or ""
+    return {"tipo": tipo, "esqueleto": ESQUELETOS[tipo], "guia_bloques": guia.strip(),
+            "reglas": [
+                "Reemplaza todos los <...>; no dejes marcadores en el entregable.",
+                "El código 'despues' debe poder copiarse y pegarse sin tocar nada.",
+                "El código 'antes' lleva los números de línea del fuente original ('desde').",
+                "Marca los cambios ABAP con *BOM / *EOM (usa marca_modificacion para el texto exacto).",
+            ]}
+
+
+@mcp.tool()
+def generar_documento_word(tipo: str, contenido: dict, ruta: str) -> dict:
+    """Genera un .docx con el formato estándar (A4, Calibri, ficha Dato/Detalle, secciones numeradas,
+    tablas con encabezado del color de marca). tipo: 'ef', 'et' o 'qa'. contenido: el JSON de ver_plantilla completado.
+    ruta: archivo .docx de salida."""
+    if tipo.lower() not in ("ef", "et", "qa"):
+        raise ValueError("tipo debe ser 'ef', 'et' o 'qa'")
+    salida = _word.generar(contenido, cargar_marca(cargar_config()), ruta)
+    auditar("generar_documento_word", None, {"tipo": tipo, "ruta": salida})
+    return {"ok": True, "ruta": salida}
+
+
+@mcp.tool()
+def generar_informe_web(contenido: dict, ruta: str) -> dict:
+    """Genera el informe web en un único .html sin recursos externos (logos incrustados, modo claro/oscuro,
+    índice, pasos con código Antes/Después y botón Copiar). contenido: el JSON de ver_plantilla('informe') completado."""
+    salida = _web.generar(contenido, cargar_marca(cargar_config()), ruta)
+    auditar("generar_informe_web", None, {"ruta": salida})
+    return {"ok": True, "ruta": salida, "abrir": Path(salida).resolve().as_uri()}
+
+
+@mcp.tool()
+def marca_modificacion(ticket: str, descripcion: str = "") -> dict:
+    """Devuelve las líneas exactas de comentario *BOM / *EOM para marcar código ABAP modificado, según 'ticket_formato'."""
+    bom, eom = bom_eom(cargar_marca(cargar_config()), ticket, descripcion)
+    return {"bom": bom, "eom": eom}
 
 
 @mcp.tool()

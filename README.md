@@ -10,7 +10,10 @@ Claude trabaja sobre las sesiones que **tú ya abriste** en SAP Logon. El plugin
 |---|---|
 | **Servidor MCP `sapgui`** (Python) | Las herramientas que Claude usa para manejar SAP GUI |
 | **Skill `sapgui`** | El método de trabajo: explorar antes de actuar, manejo de popups, particularidades de los editores |
-| **Agente `sapgui-operador`** | Subagente al que Claude delega tareas completas en SAP |
+| **Agente `sapgui-operador`** | Subagente al que Claude delega tareas sueltas en SAP |
+| **Equipo SAP: `sap-funcional`, `sap-abap`, `sap-qa`** | Agentes del flujo de desarrollo completo con validación de QA |
+| **Skill `sap-desarrollo`** | Orquesta el flujo especificación → desarrollo → prueba → QA → entrega |
+| **Plantillas de entregables** | Especificación funcional, técnica y dictamen QA en Word, e informe web en HTML |
 
 ### Herramientas
 
@@ -20,6 +23,7 @@ Claude trabaja sobre las sesiones que **tú ya abriste** en SAP Logon. El plugin
 - **ABAP**: `leer_fuente_abap`, `reemplazar_fuente_abap` (no graba), `grabar_activar_abap`
 - **Tablas**: `leer_tabla` (SE16N con filtros y máximo de filas)
 - **Scripts propios**: `listar_scripts`, `ver_script`, `guardar_script`, `ejecutar_script`, `ejecutar_codigo`
+- **Entregables**: `ver_plantilla`, `generar_documento_word`, `generar_informe_web`, `marca_modificacion`
 - **Configuración**: `ver_configuracion`
 
 ## Requisitos
@@ -85,6 +89,46 @@ Para revisar qué se hizo, abre el log de auditoría: `%USERPROFILE%\.sapgui-cla
 - "Toma una captura de la pantalla actual de mi sesión de DEV."
 - "Crea un script que lea los datos de cabecera de un usuario en SU01 y guárdalo para reutilizarlo."
 
+## Equipo SAP: flujo de desarrollo con QA
+
+Para un requerimiento completo, pide: *"Con el flujo sap-desarrollo, ajusta el programa Z_MI_REPORTE para … (ticket 1234, desarrollo en DEV/100, pruebas en QAS/200)"*.
+
+| Etapa | Quién | Resultado |
+|---|---|---|
+| 1. Especificación | `sap-funcional` + `sap-abap` | EF y ET en Word. ✋ **Apruebas tú** antes de desarrollar |
+| 2. Desarrollo | `sap-abap` | Código en DEV verificado, grabado y activado, con marcas `*BOM`/`*EOM`, e informe web |
+| 3. Prueba funcional | `sap-funcional` | Casos de la EF ejecutados, con capturas como evidencia |
+| 4. Validación | `sap-qa` (solo lectura) | Dictamen **CONFORME / NO CONFORME** con observaciones numeradas |
+| ↺ Corrección | `sap-abap` o `sap-funcional` | Atienden cada observación; se repiten las etapas 2–4 (**máximo 3 rondas**) |
+| 5. Entrega | Orquestador | Informe final. ✋ **Apruebas tú** |
+
+- Claude principal es quien orquesta: los subagentes no pueden lanzar otros subagentes.
+- Los agentes trabajan **en secuencia**, porque comparten un solo SAP GUI.
+- Todo queda en `trabajos/<nombre>/`: EF, ET, pruebas, dictámenes, informe y `estado.md`.
+- Si las pruebas son en otro sistema, el flujo se detiene para que se haga el transporte (normalmente lo hace Basis).
+- Si QA no queda conforme en 3 rondas, el flujo se detiene y te entrega lo pendiente.
+- Para tareas sueltas usa `sapgui-operador`.
+
+## Plantillas de entregables
+
+Los agentes no dibujan los documentos a mano. Completan un esqueleto JSON (`ver_plantilla`) y las herramientas generan siempre el mismo formato:
+
+- **Word** (`generar_documento_word`, tipos `ef`, `et` y `qa`):
+  - A4, Calibri, título, ficha *Dato | Detalle* y secciones numeradas;
+  - tablas con encabezado del color de marca y filas alternas;
+  - pie con empresa y número de página.
+  - **EF**: objetivo, situación actual, alcance, cambios, datos y tablas, casos de prueba, prerrequisitos de configuración, fuera de alcance, puntos por confirmar y fuentes.
+  - **ET**: objetos, diseño por objeto, lógica, errores y mensajes, rendimiento y autorizaciones, pruebas unitarias y riesgos.
+  - **QA**: resultado, observaciones con severidad, cobertura de la EF, revisión de código y evidencia.
+- **Informe web** (`generar_informe_web`): un único `.html` **sin recursos externos**.
+  - Logos incrustados en base64, franja de marca, modo claro y oscuro.
+  - Índice lateral, tarjetas de estado y pasos numerados con casilla "Aplicado".
+  - Código **Antes** con los números de línea del fuente original, y **Después** listo para copiar y pegar (botón Copiar).
+  - Tablas de pruebas y pendientes.
+- **Marcas ABAP**: `marca_modificacion` devuelve las líneas `*BOM <ticket> - <descripción>` / `*EOM <ticket>` según tu formato.
+
+La marca (empresa, logos y colores) se configura en `config.json`; ver [Configuración](#configuración-opcional).
+
 ## Scripts propios: crear y adaptar
 
 Las herramientas fijas cubren lo más común. Para todo lo demás, Claude escribe **scripts en Python** que puede reutilizar:
@@ -119,7 +163,14 @@ Por defecto **todo está habilitado**. Para restringir, crea `%USERPROFILE%\.sap
   "sistemas_permitidos": ["DEV", "QAS/200"],
   "solo_lectura": false,
   "tablas_bloqueadas": ["USR02"],
-  "log_auditoria": "C:/Users/TU_USUARIO/.sapgui-claude/auditoria.jsonl"
+  "log_auditoria": "C:/Users/TU_USUARIO/.sapgui-claude/auditoria.jsonl",
+  "marca": {
+    "empresa": "Mi Consultora",
+    "logo_izquierdo": "C:/Users/TU_USUARIO/.sapgui-claude/logos/consultora.png",
+    "logo_derecho": "C:/Users/TU_USUARIO/.sapgui-claude/logos/cliente.png",
+    "colores": { "primario": "#2F6FA3", "secundario": "#4C8CC0", "acento": "#8FB8DE" },
+    "ticket_formato": "{ticket} - {descripcion}"
+  }
 }
 ```
 
@@ -129,6 +180,10 @@ Por defecto **todo está habilitado**. Para restringir, crea `%USERPROFILE%\.sap
 | `solo_lectura` | Bloquea escribir campos, presionar botones, teclas, menús, scripts con `ESCRIBE = True` y `ejecutar_codigo` |
 | `tablas_bloqueadas` | `leer_tabla` las rechaza |
 | `log_auditoria` | Archivo JSONL con cada acción (hora, sistema, usuario, detalle). Activado por defecto; `""` lo desactiva |
+| `marca.empresa` | Aparece en el pie de los Word ("Empresa · Título · Página n") y en el informe web ("Elaborado por …") |
+| `marca.logo_izquierdo` / `marca.logo_derecho` | Rutas a imágenes PNG, JPG o SVG; se incrustan en la franja del informe web. Sin logos, la franja muestra solo la etiqueta |
+| `marca.colores` | `primario` (encabezados de tabla, títulos, acentos), `secundario` y `acento` (línea de marca y acento en modo oscuro). Por defecto, azules neutros |
+| `marca.ticket_formato` | Texto de la marca `*BOM`; variables `{ticket}` y `{descripcion}` |
 
 La carpeta base se puede cambiar con la variable de entorno `SAPGUI_CLAUDE_HOME`.
 
@@ -165,9 +220,11 @@ plugins/sapgui/
   .mcp.json
   server/sapgui_mcp.py           servidor MCP
   server/scripts_base/           utilidades.py y scripts incluidos
+  server/plantillas/             Word (EF/ET/QA), informe web, marca y esqueletos
   server/config.ejemplo.json
-  skills/sapgui/SKILL.md
-  agents/sapgui-operador.md
+  skills/sapgui/SKILL.md         método de trabajo con SAP GUI
+  skills/sap-desarrollo/SKILL.md flujo del equipo SAP con QA
+  agents/                        sapgui-operador, sap-funcional, sap-abap, sap-qa
 docs/requisitos-sap.md
 ```
 

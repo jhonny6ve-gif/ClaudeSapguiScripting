@@ -2,5 +2,12 @@
   "sistemas_permitidos": ["DEV", "QAS/200"],
   "solo_lectura": false,
   "tablas_bloqueadas": ["USR02", "PA0008"],
-  "log_auditoria": "C:/Users/TU_USUARIO/.sapgui-claude/auditoria.jsonl"
+  "log_auditoria": "C:/Users/TU_USUARIO/.sapgui-claude/auditoria.jsonl",
+  "marca": {
+    "empresa": "Mi Consultora",
+    "logo_izquierdo": "C:/Users/TU_USUARIO/.sapgui-claude/logos/consultora.png",
+    "logo_derecho": "C:/Users/TU_USUARIO/.sapgui-claude/logos/cliente.png",
+    "colores": { "primario": "#2F6FA3", "secundario": "#4C8CC0", "acento": "#8FB8DE" },
+    "ticket_formato": "{ticket} - {descripcion}"
+  }
 }

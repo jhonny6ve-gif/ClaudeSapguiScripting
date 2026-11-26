@@ -1,6 +1,6 @@
 {
   "name": "sapgui",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Controla SAP GUI for Windows por SAP GUI Scripting: sesiones, transacciones, lectura y escritura de pantallas, fuentes ABAP, tablas SE16N y scripts propios extensibles",
   "author": { "name": "jhonny6ve-gif" },
   "homepage": "https://github.com/jhonny6ve-gif/ClaudeSapguiScripting",
