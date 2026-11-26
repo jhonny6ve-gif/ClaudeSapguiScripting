@@ -1,0 +1,6 @@
+{
+  "sistemas_permitidos": ["DEV", "QAS/200"],
+  "solo_lectura": false,
+  "tablas_bloqueadas": ["USR02", "PA0008"],
+  "log_auditoria": "C:/Users/TU_USUARIO/.sapgui-claude/auditoria.jsonl"
+}
