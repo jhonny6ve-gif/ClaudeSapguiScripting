@@ -127,6 +127,77 @@ def leer_editor(ed) -> list[str]:
     return [ed.GetLineText(i) for i in range(ed.LineCount)]
 
 
+def filas_tabla_control(session, id_tabla: str, columnas: tuple = (0,), max_filas: int = 2000):
+    """Recorre TODAS las filas de un table control (tbl...) desplazando el scroll.
+    Devuelve [(fila_absoluta, [textos de 'columnas'])] solo de filas con algún dato.
+    Vuelve a buscar el control tras cada desplazamiento (SAP lo recrea)."""
+    t = session.findById(id_tabla)
+    total, vis = t.RowCount, max(t.VisibleRowCount, 1)
+    out, pos = [], 0
+    while pos < min(total, max_filas):
+        session.findById(id_tabla).verticalScrollbar.position = pos
+        t = session.findById(id_tabla)
+        for r in range(vis):
+            vals = []
+            for c in columnas:
+                try:
+                    vals.append(t.GetCell(r, c).Text.strip())
+                except Exception:  # noqa: BLE001  (fila vacía o fuera de rango)
+                    vals.append("")
+            if any(vals):
+                out.append((pos + r, vals))
+        pos += vis
+    return out
+
+
+def activar_solo(session, nombres) -> list[dict]:
+    """En el popup 'Objetos inactivos' (wnd[1]) marca SOLO los objetos cuyo nombre está en 'nombres'
+    (recorre todas las pestañas y todas las filas) y presiona Continuar. Devuelve lo que había y lo marcado."""
+    nombres = {n.upper() for n in ([nombres] if isinstance(nombres, str) else nombres)}
+    p = session.findById("wnd[1]")
+    ts = buscar_tipo(p, "GuiTabStrip")
+    tabs = [ts.Children(i).Id for i in range(ts.Children.Count)] if ts is not None else [None]
+    vistos = []
+    for tab_id in tabs:
+        if tab_id:
+            session.findById(tab_id).select()
+            esperar(session)
+        cont = session.findById(tab_id) if tab_id else session.findById("wnd[1]")
+        t = buscar_tipo(cont, "GuiTableControl")
+        if t is None:
+            continue
+        tid = t.Id.split(session.Id + "/")[-1]
+        for fila, (tipo, nombre) in filas_tabla_control(session, tid, (1, 2)):
+            marcar = nombre.upper() in nombres
+            session.findById(tid).GetAbsoluteRow(fila).Selected = marcar
+            vistos.append({"tipo": tipo, "nombre": nombre, "marcado": marcar})
+    session.findById("wnd[1]/tbar[0]/btn[0]").press()
+    esperar(session)
+    return vistos
+
+
+def leer_lista(session, ventana: str = "wnd[0]") -> list[str]:
+    """Lee una lista ABAP clásica (WRITE) como líneas de texto, respetando columnas:
+    los controles se llaman lbl[col,fila] / txt[col,fila], así que se reconstruye el espaciado real."""
+    usr = session.findById(f"{ventana}/usr")
+    celdas = {}
+    import re  # noqa: PLC0415
+
+    for o in hijos(usr):
+        m = re.search(r"\[(\d+),(\d+)\]$", o.Id)
+        if not m:
+            continue
+        col, fila = int(m.group(1)), int(m.group(2))
+        celdas.setdefault(fila, []).append((col, o.Text))
+    lineas = []
+    for fila in sorted(celdas):
+        linea = ""
+        for col, txt in sorted(celdas[fila]):
+            linea = linea.ljust(col) + txt
+        lineas.append(linea.rstrip())
+    return lineas
+
+
 def leer_grid(grid, max_filas: int = 1000) -> dict:
     """Lee un ALV grid (GuiShell subtipo GridView): columnas y filas como listas."""
     cols_obj = grid.ColumnOrder

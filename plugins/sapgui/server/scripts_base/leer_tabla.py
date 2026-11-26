@@ -5,6 +5,7 @@ Argumentos:
   filtros    {"CAMPO": "valor"}: valor simple (igualdad, campo 'Valor inferior'); acepta comodines * de SE16N
   max_filas  máximo de filas a traer (por defecto 200)
   ruta_csv   opcional: guarda el resultado en CSV (separador ;, UTF-8)
+  columnas   opcional: lista de campos a devolver (p. ej. ["NAME", "STATE"]); por defecto todos
 Devuelve columnas (nombres técnicos) y filas. Si no hay datos, devuelve el mensaje de la barra de estado.
 """
 import csv
@@ -31,7 +32,7 @@ def _poner_filtro(session, campo, valor):
     raise RuntimeError(f"Campo {campo} no encontrado en la pantalla de selección")
 
 
-def run(session, tabla, filtros=None, max_filas=200, ruta_csv=None):
+def run(session, tabla, filtros=None, max_filas=200, ruta_csv=None, columnas=None):
     tabla = tabla.upper()
     u.tx(session, "SE16N")
     session.findById("wnd[0]/usr/ctxtGD-TAB").text = tabla
@@ -50,6 +51,11 @@ def run(session, tabla, filtros=None, max_filas=200, ruta_csv=None):
         u.tx(session, "")
         return {"tabla": tabla, "sin_datos": True, "mensaje": msg}
     datos = u.leer_grid(grid, max_filas)
+    if columnas:
+        quiero = [c.upper() for c in columnas]
+        idx = [i for i, c in enumerate(datos["columnas"]) if c.upper() in quiero]
+        datos["columnas"] = [datos["columnas"][i] for i in idx]
+        datos["filas"] = [[f[i] for i in idx] for f in datos["filas"]]
     if ruta_csv:
         with open(ruta_csv, "w", encoding="utf-8", newline="") as f:
             w = csv.writer(f, delimiter=";")

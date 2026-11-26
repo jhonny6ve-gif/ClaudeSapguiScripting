@@ -45,7 +45,10 @@ def data_uri(ruta: str) -> str:
     return f"data:{mime};base64," + base64.b64encode(p.read_bytes()).decode()
 
 
-def bom_eom(marca: dict, ticket: str, descripcion: str = "") -> tuple[str, str]:
+def bom_eom(marca: dict, ticket: str, descripcion: str = "", usuario: str = "") -> tuple[str, str]:
     """Líneas de comentario de marca de modificación ABAP."""
-    txt = marca["ticket_formato"].format(ticket=ticket, descripcion=descripcion).rstrip(" -")
+    import datetime as _dt  # noqa: PLC0415
+
+    txt = marca["ticket_formato"].format(ticket=ticket, descripcion=descripcion, usuario=usuario,
+                                         fecha=_dt.date.today().strftime("%d.%m.%Y")).rstrip(" -")
     return f"*BOM {txt}", f"*EOM {ticket}"

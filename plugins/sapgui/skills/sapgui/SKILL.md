@@ -71,6 +71,8 @@ Funciones de `utilidades`: `tx`, `enter`, `esperar`, `buscar` (findById sin erro
 - Los table controls (`tbl…`) solo muestran las filas visibles. Para llegar a otras, mueve `verticalScrollbar.position` y vuelve a buscar el control.
 - ALV grid (`GuiShell` subtipo `GridView`): `GetCellValue(fila, columna)`; mueve `firstVisibleRow` para que carguen las filas.
 - Editor de líneas de SAPscript (SE71): Enter **inserta** una línea encima del cursor y puede mover el scroll, y las filas después del final no son editables. Método: crea primero las filas necesarias, vuelve el scroll a 0, reescribe el bloque completo y relee para comparar.
+- `ejecutar_transaccion` usa `/n`, que en el editor ABAP **descarta sin preguntar** los cambios no grabados. Antes de cambiar de transacción, graba lo que quieras conservar.
+- Para crear un programa nuevo usa el script `crear_programa` (atributos, paquete `$TMP` u otro con orden, y código opcional).
 - Los textos de la interfaz dependen del idioma de logon. Compara contra IDs y nombres técnicos, no contra textos, siempre que se pueda.
 
 ## Configuración

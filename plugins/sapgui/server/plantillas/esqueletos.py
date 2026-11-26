@@ -53,6 +53,8 @@ ET = {
         {"titulo": "Rendimiento y autorizaciones", "bloques": [{"tipo": "lista", "items": ["<accesos a BD, índices, AUTHORITY-CHECK>"]}]},
         {"titulo": "Pruebas unitarias", "bloques": [
             {"tipo": "tabla", "columnas": ["Nº", "Prueba", "Resultado esperado", "Resultado"], "filas": [["1", "<prueba>", "<esperado>", "<OK/NOK>"]]}]},
+        {"titulo": "Supuestos y puntos resueltos", "bloques": [
+            {"tipo": "tabla", "columnas": ["Nº", "Supuesto / punto", "Resolución", "Confirmado por"], "filas": [["1", "<punto>", "<resolución>", "<usuario / pendiente>"]]}]},
         {"titulo": "Riesgos y dependencias", "bloques": [{"tipo": "lista", "items": ["<riesgo>"]}]},
     ],
 }

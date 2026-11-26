@@ -20,7 +20,8 @@ Claude trabaja sobre las sesiones que **tú ya abriste** en SAP Logon. El plugin
 - **Sesiones**: `listar_sesiones`, `abrir_sesion`, `cerrar_sesion`
 - **Navegación**: `ejecutar_transaccion`, `enviar_tecla`, `seleccionar_menu`
 - **Pantallas**: `leer_pantalla` (árbol de controles con sus IDs), `leer_campo`, `escribir_campo`, `presionar`, `barra_estado`, `captura`
-- **ABAP**: `leer_fuente_abap`, `reemplazar_fuente_abap` (no graba), `grabar_activar_abap`
+- **ABAP**: `leer_fuente_abap`, `reemplazar_fuente_abap` (no graba), `grabar_activar_abap` (puede activar solo tus objetos), `crear_programa`, `textos_seleccion`
+- **Ejecutar reports**: `ejecutar_programa` (llena la selección, ejecuta y devuelve la lista como texto o el error de validación)
 - **Tablas**: `leer_tabla` (SE16N con filtros y máximo de filas)
 - **Scripts propios**: `listar_scripts`, `ver_script`, `guardar_script`, `ejecutar_script`, `ejecutar_codigo`
 - **Entregables**: `ver_plantilla`, `generar_documento_word`, `generar_informe_web`, `marca_modificacion`

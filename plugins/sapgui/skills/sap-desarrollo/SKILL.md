@@ -14,7 +14,20 @@ Confirma con el usuario o toma de lo que ya dijo:
 - orden de transporte, si ya existe;
 - nombre corto del trabajo.
 
-Crea la carpeta `trabajos/<nombre>/` en el directorio actual. Ahí quedan todos los artefactos, para que cada agente lea lo anterior sin depender de la memoria de otro.
+Crea la carpeta `trabajos/<nombre>/` en el directorio actual y pásales a todos los agentes su **ruta absoluta**. Ahí quedan todos los artefactos, con estos nombres, para que cada agente lea lo anterior sin depender de la memoria de otro:
+- `ef.json`, `EF_<ticket>.docx`
+- `et.json`, `codigo_propuesto.abap`, `ET_<ticket>.docx`
+- `pruebas.json` y las capturas `prueba_rN_casoM_*.png`
+- `qa_rN.json`, `QA_<ticket>_RN.docx`
+- `informe.json`, `Informe_<ticket>.html`
+- `estado.md`
+
+## Tiempo y costo
+Cada llamada a un agente arranca sin contexto y tarda minutos. Con el flujo completo, un requerimiento chico lleva unas 6 a 8 llamadas. Para que rinda:
+- en cada llamada pasa solo lo necesario: la etapa, las rutas y las observaciones por número;
+- pide a los agentes que hagan varios casos en una sola llamada de herramienta;
+- en las correcciones, vuelve a llamar solo a quien tiene observaciones;
+- si el usuario lo pide o el cambio es trivial, propón el **modo corto**: `sap-abap` redacta la EF y la ET juntas (con la puerta 1 igual) y `sap-qa` ejecuta también los casos de prueba, sin una llamada aparte del funcional.
 
 ## Etapas
 1. **Especificación**

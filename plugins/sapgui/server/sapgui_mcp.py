@@ -23,6 +23,7 @@ import io
 import json
 import os
 import queue
+import re
 import shutil
 import sys
 import tempfile
@@ -560,8 +561,10 @@ def captura(id_sesion: str, ventana: str = "wnd[0]", ruta: str | None = None) ->
 
     def fn(s):
         destino = ruta or os.path.join(tempfile.gettempdir(), f"sapgui_{_dt.datetime.now():%Y%m%d_%H%M%S}.png")
-        s.findById(ventana).HardCopy(destino, 2)
-        return destino
+        destino = os.path.abspath(os.path.expanduser(destino))  # SAP no acepta '/' en la ruta
+        os.makedirs(os.path.dirname(destino), exist_ok=True)
+        real = s.findById(ventana).HardCopy(destino, 2)
+        return real if isinstance(real, str) and os.path.exists(real) else destino
 
     p = _accion("captura", id_sesion, fn, escribe=False)
     return Image(path=p)
@@ -586,17 +589,46 @@ def reemplazar_fuente_abap(id_sesion: str, nombre: str, bloques: list[dict], tip
 
 
 @mcp.tool()
-def grabar_activar_abap(id_sesion: str, accion: str = "grabar") -> dict:
+def grabar_activar_abap(id_sesion: str, accion: str = "grabar", solo: list[str] | None = None) -> dict:
     """En el editor ABAP abierto: accion='grabar' (Ctrl+S), 'verificar' (Ctrl+F2) o 'activar' (Ctrl+F3).
-    Devuelve popups (orden de transporte, lista de activación) para que se respondan con presionar/escribir_campo."""
-    return _correr_script("grabar_activar_abap", id_sesion, {"accion": accion})
+    Con accion='activar' y solo=["OBJETO", ...], si aparece la lista de objetos inactivos marca SOLO esos y continúa.
+    Otros popups (orden de transporte, advertencias) se devuelven para responderlos con presionar/escribir_campo."""
+    return _correr_script("grabar_activar_abap", id_sesion, {"accion": accion, "solo": solo})
 
 
 @mcp.tool()
-def leer_tabla(id_sesion: str, tabla: str, filtros: dict[str, str] | None = None, max_filas: int = 200, ruta_csv: str | None = None) -> dict:
+def leer_tabla(id_sesion: str, tabla: str, filtros: dict[str, str] | None = None, max_filas: int = 200,
+               ruta_csv: str | None = None, columnas: list[str] | None = None) -> dict:
     """Lee una tabla con SE16N en modo visualizar. filtros = {"CAMPO": "valor"} (valor simple, igualdad).
-    Devuelve columnas y filas (hasta max_filas) y opcionalmente guarda CSV. Implementado por el script 'leer_tabla'."""
-    return _correr_script("leer_tabla", id_sesion, {"tabla": tabla, "filtros": filtros or {}, "max_filas": max_filas, "ruta_csv": ruta_csv})
+    columnas = ["CAMPO1", ...] limita los campos devueltos. Devuelve columnas y filas (hasta max_filas) y
+    opcionalmente guarda CSV. Implementado por el script 'leer_tabla'."""
+    return _correr_script("leer_tabla", id_sesion, {"tabla": tabla, "filtros": filtros or {}, "max_filas": max_filas,
+                                                     "ruta_csv": ruta_csv, "columnas": columnas})
+
+
+@mcp.tool()
+def ejecutar_programa(id_sesion: str, programa: str, parametros: dict[str, str] | None = None, ejecutar: bool = True) -> dict:
+    """Ejecuta un report (SE38 → F8) llenando la pantalla de selección con parametros = {"P_CAMPO": "valor"}.
+    Devuelve etiquetas y valores de la pantalla de selección, la lista resultante como líneas de texto
+    (respetando columnas) y la barra de estado; en_seleccion=True si quedó en la selección (p. ej. error de validación).
+    Implementado por el script 'ejecutar_programa'."""
+    return _correr_script("ejecutar_programa", id_sesion, {"programa": programa, "parametros": parametros or {}, "ejecutar": ejecutar})
+
+
+@mcp.tool()
+def crear_programa(id_sesion: str, nombre: str, titulo: str, tipo: str = "1", paquete: str = "$TMP",
+                   orden: str | None = None, codigo: str | None = None) -> dict:
+    """Crea un programa Z/Y en SE38 (atributos, paquete u objeto local $TMP, orden si corresponde) y opcionalmente
+    carga su código sin grabar. Implementado por el script 'crear_programa'."""
+    return _correr_script("crear_programa", id_sesion, {"nombre": nombre, "titulo": titulo, "tipo": tipo,
+                                                         "paquete": paquete, "orden": orden, "codigo": codigo})
+
+
+@mcp.tool()
+def textos_seleccion(id_sesion: str, programa: str, textos: dict[str, str], activar: bool = True) -> dict:
+    """Mantiene los textos de selección de un programa (SE38 > Elementos de texto), graba y activa solo ese programa.
+    textos = {"P_CAMPO": "Texto visible"}. Implementado por el script 'textos_seleccion'."""
+    return _correr_script("textos_seleccion", id_sesion, {"programa": programa, "textos": textos, "activar": activar})
 
 
 # ---- Scripts: crear, adaptar, ejecutar ----
@@ -700,7 +732,7 @@ def ejecutar_codigo(id_sesion: str, codigo: str) -> dict:
         except Exception as e:  # noqa: BLE001
             auditar("ejecutar_codigo", info, {"codigo": codigo, "error": str(e)}, ok=False)
             return {"ok": False, "error": f"{type(e).__name__}: {e}", "traceback": traceback.format_exc(limit=6),
-                    "salida": buf.getvalue(), **_resumen(s)}
+                    "resultado_parcial": ns.get("resultado"), "salida": buf.getvalue(), **_resumen(s)}
 
     return COM.run(trabajo)
 
@@ -714,13 +746,31 @@ def ver_plantilla(tipo: str) -> dict:
     if tipo not in ESQUELETOS:
         raise ValueError(f"tipo debe ser uno de {list(ESQUELETOS)}")
     guia = (_web.__doc__ if tipo == "informe" else _word.__doc__) or ""
-    return {"tipo": tipo, "esqueleto": ESQUELETOS[tipo], "guia_bloques": guia.strip(),
-            "reglas": [
-                "Reemplaza todos los <...>; no dejes marcadores en el entregable.",
-                "El código 'despues' debe poder copiarse y pegarse sin tocar nada.",
-                "El código 'antes' lleva los números de línea del fuente original ('desde').",
-                "Marca los cambios ABAP con *BOM / *EOM (usa marca_modificacion para el texto exacto).",
-            ]}
+    reglas = ["Reemplaza todos los <...>: las herramientas de generación rechazan contenido con marcadores sin completar.",
+              "Arma el JSON en un archivo y pásalo completo; no lo escribas en línea en la terminal."]
+    if tipo == "ef":
+        reglas += ["Si falta una regla de negocio, propón un valor razonable y déjalo en 'Puntos por confirmar'.",
+                   "Los casos de prueba deben tener un resultado esperado medible."]
+    if tipo in ("et", "informe"):
+        reglas += ["Marca los cambios ABAP con *BOM / *EOM (usa marca_modificacion para el texto exacto).",
+                   "El código 'después' debe poder copiarse y pegarse sin tocar nada."]
+    if tipo == "informe":
+        reglas += ["El código 'antes' lleva los números de línea del fuente original ('desde'); omite 'desde' si no aplica."]
+    if tipo == "et":
+        reglas += ["En 'Diseño por objeto' muestra el código original reemplazado (con su número de línea) y el nuevo.",
+                   "Para objetos locales ($TMP) indica Paquete '$TMP' y Orden 'No aplica (objeto local)'."]
+    return {"tipo": tipo, "esqueleto": ESQUELETOS[tipo], "guia_bloques": guia.strip(), "reglas": reglas}
+
+
+def _marcadores(o, ruta: str = "") -> list[str]:
+    """Rutas del contenido donde quedaron marcadores <...> sin completar."""
+    if isinstance(o, str):
+        return [ruta or "/"] if re.search(r"<[^<>\n]{2,80}>", o) else []
+    if isinstance(o, list):
+        return [x for i, v in enumerate(o) for x in _marcadores(v, f"{ruta}[{i}]")]
+    if isinstance(o, dict):
+        return [x for k, v in o.items() for x in _marcadores(v, f"{ruta}.{k}")]
+    return []
 
 
 @mcp.tool()
@@ -730,6 +780,9 @@ def generar_documento_word(tipo: str, contenido: dict, ruta: str) -> dict:
     ruta: archivo .docx de salida."""
     if tipo.lower() not in ("ef", "et", "qa"):
         raise ValueError("tipo debe ser 'ef', 'et' o 'qa'")
+    pend = _marcadores(contenido)
+    if pend:
+        return {"ok": False, "error": "Quedan marcadores <...> sin completar", "donde": pend[:20]}
     salida = _word.generar(contenido, cargar_marca(cargar_config()), ruta)
     auditar("generar_documento_word", None, {"tipo": tipo, "ruta": salida})
     return {"ok": True, "ruta": salida}
@@ -739,15 +792,19 @@ def generar_documento_word(tipo: str, contenido: dict, ruta: str) -> dict:
 def generar_informe_web(contenido: dict, ruta: str) -> dict:
     """Genera el informe web en un único .html sin recursos externos (logos incrustados, modo claro/oscuro,
     índice, pasos con código Antes/Después y botón Copiar). contenido: el JSON de ver_plantilla('informe') completado."""
+    pend = _marcadores(contenido)
+    if pend:
+        return {"ok": False, "error": "Quedan marcadores <...> sin completar", "donde": pend[:20]}
     salida = _web.generar(contenido, cargar_marca(cargar_config()), ruta)
     auditar("generar_informe_web", None, {"ruta": salida})
     return {"ok": True, "ruta": salida, "abrir": Path(salida).resolve().as_uri()}
 
 
 @mcp.tool()
-def marca_modificacion(ticket: str, descripcion: str = "") -> dict:
-    """Devuelve las líneas exactas de comentario *BOM / *EOM para marcar código ABAP modificado, según 'ticket_formato'."""
-    bom, eom = bom_eom(cargar_marca(cargar_config()), ticket, descripcion)
+def marca_modificacion(ticket: str, descripcion: str = "", usuario: str = "") -> dict:
+    """Devuelve las líneas exactas de comentario *BOM / *EOM según 'ticket_formato' (variables {ticket}, {descripcion},
+    {usuario}, {fecha}). El código original reemplazado se deja comentado ('*') entre BOM y EOM, antes del nuevo."""
+    bom, eom = bom_eom(cargar_marca(cargar_config()), ticket, descripcion, usuario)
     return {"bom": bom, "eom": eom}
 
 
